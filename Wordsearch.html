@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halloween Word Search</title>
+<style>
+  body {
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px;
+    background: linear-gradient(135deg, #1a1a1a, #4b0000);
+    color: #ffcc00;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    top:0; left:0; width:100%; height:100%;
+    background: url('https://i.imgur.com/0y8Ftya.png') center/cover no-repeat;
+    opacity: 0.15;
+    pointer-events:none;
+    z-index:-1;
+  }
+  h1 {
+    margin-bottom: 15px;
+    text-align: center;
+    text-shadow: 2px 2px 4px #000;
+  }
+  #words {
+    margin-bottom: 15px;
+    text-align: center;
+    font-weight: bold;
+  }
+  #words span {
+    margin: 0 5px;
+    cursor: default;
+    color: #ffcc00;
+    text-shadow: 1px 1px 2px #000;
+  }
+  #words span.found {
+    text-decoration: line-through;
+    color: #00ff00;
+    text-shadow:none;
+  }
+  #grid { display: grid; gap: 2px; touch-action: none; }
+  .cell {
+    width: 35px; height: 35px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #ff6600;
+    font-weight: bold; font-size: 16px;
+    user-select: none;
+    background-color: #2b0000;
+    color: #ffcc00;
+    border-radius: 5px;
+    box-shadow: 0 0 5px #ff6600;
+  }
+  .selected { background-color: #993399; color: #fff; }
+  .found { background-color: #ff6600; color: #000; }
+  #completed, #timeUp {
+    display: none;
+    font-size: 24px;
+    color: #00ff00;
+    font-weight: bold;
+    margin-top: 15px;
+    text-align: center;
+    text-shadow: 1px 1px 2px #000;
+  }
+  #controls { margin: 10px; display: flex; gap: 15px; align-items: center; }
+  #timer { font-weight: bold; font-size: 18px; }
+  button { padding: 5px 10px; font-size: 16px; cursor: pointer; }
+  #confetti { position: fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden; display:none; }
+  .confetti { position: absolute; width:10px; height:10px; opacity:0.8; animation: fall 3s linear forwards; }
+  @keyframes fall { 0% { transform: translateY(-10px) rotate(0deg); } 100% { transform: translateY(100vh) rotate(360deg); } }
+  @media (max-width: 480px) {
+    .cell { width: 28px; height: 28px; font-size: 14px; }
+    #controls { flex-direction: column; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>🎃 Halloween Word Search 🎃</h1>
+<div id="controls">
+  <div id="timer">Time: 5:00</div>
+  <button id="newPuzzle">New Puzzle</button>
+</div>
+<div id="words"></div>
+<div id="grid"></div>
+<div id="completed">🎉 Congratulations! You found all the words! 🎉</div>
+<div id="timeUp">
+  ⏰ Time's Up!<br>
+  <button id="restart">Restart</button>
+  <button id="playNew">New Puzzle</button>
+</div>
+<div id="confetti"></div>
+
+<!-- Sound effects -->
+<audio id="wordSound" src="https://www.soundjay.com/buttons/sounds/button-16.mp3"></audio>
+<audio id="completedSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3"></audio>
+
+<script>
+let words = [
+  "BIODIVERSITY","RENEWABLE","ECOSYSTEM","CARBONFOOTPRINT","UPCYCLING",
+  "SUSTAINABILITY","WASTEREDUCTION","SOLARENERGY","GREENHOUSE","ECOFRIENDLY",
+  "COMPOSTING","CIRCULARITY","CONSERVATION","REFORESTATION","EFFICIENT"
+];
+const gridSize = 15;
+const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const directions = [[0,1],[1,0],[0,-1],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]];
+
+let grid = [];
+let selectedCells = [], foundWords=[];
+let timerInterval=null, secondsLeft=300;
+
+function coordKey(r,c){ return `${r},${c}`; }
+function getCell(r,c){ return document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`); }
+
+function initPuzzle(){
+  clearInterval(timerInterval);
+  secondsLeft = 300;
+  document.getElementById("timer").textContent = "Time: 5:00";
+  document.getElementById("completed").style.display="none";
+  document.getElementById("timeUp").style.display="none";
+  document.getElementById("confetti").style.display="none";
+
+  foundWords=[];
+  selectedCells=[];
+  grid = Array.from({length:gridSize}, ()=>Array(gridSize).fill(''));
+  words.forEach(w=>placeWord(w.toUpperCase()));
+  for(let r=0;r<gridSize;r++){ for(let c=0;c<gridSize;c++){ if(grid[r][c]==='') grid[r][c]=letters[Math.floor(Math.random()*letters.length)]; } }
+
+  renderWords();
+  renderGrid();
+
+  timerInterval = setInterval(()=>{
+    secondsLeft--;
+    const minutes = Math.floor(secondsLeft/60);
+    const seconds = secondsLeft%60;
+    document.getElementById("timer").textContent = `Time: ${minutes}:${seconds.toString().padStart(2,'0')}`;
+    if(secondsLeft <=0){ clearInterval(timerInterval); showAllAnswers(); }
+  },1000);
+}
+
+function placeWord(word){
+  for(let attempt=0; attempt<1000; attempt++){
+    const [dr,dc] = directions[Math.floor(Math.random()*directions.length)];
+    const row = Math.floor(Math.random()*gridSize);
+    const col = Math.floor(Math.random()*gridSize);
+    const endRow = row + dr*(word.length-1);
+    const endCol = col + dc*(word.length-1);
+    if(endRow<0||endRow>=gridSize||endCol<0||endCol>=gridSize) continue;
+    let canPlace = true;
+    for(let i=0;i<word.length;i++){
+      const r=row+dr*i, c=col+dc*i;
+      if(grid[r][c]!=='' && grid[r][c]!==word[i]) { canPlace=false; break; }
+    }
+    if(canPlace){ for(let i=0;i<word.length;i++){ const r=row+dr*i, c=col+dc*i; grid[r][c]=word[i]; } return true; }
+  }
+  return false;
+}
+
+function renderWords(){
+  const wordsDiv = document.getElementById("words");
+  wordsDiv.innerHTML='';
+  words.forEach(w=>{
+    const span = document.createElement("span");
+    span.textContent=w;
+    if(foundWords.includes(w)) span.classList.add("found");
+    wordsDiv.appendChild(span);
+  });
+}
+
+function renderGrid(){
+  const gridDiv = document.getElementById("grid");
+  gridDiv.innerHTML='';
+  gridDiv.style.gridTemplateColumns = `repeat(${gridSize},35px)`;
+
+  for(let r=0;r<gridSize;r++){
+    for(let c=0;c<gridSize;c++){
+      const cell = document.createElement("div");
+      cell.className="cell";
+      cell.textContent = grid[r][c];
+      cell.dataset.row=r;
+      cell.dataset.col=c;
+
+      cell.addEventListener("click", ()=>{
+        const key = coordKey(r,c);
+        if(!selectedCells.includes(key)){
+          selectedCells.push(key);
+          cell.classList.add("selected");
+        } else {
+          selectedCells = selectedCells.filter(k=>k!==key);
+          cell.classList.remove("selected");
+        }
+        checkSelection();
+      });
+
+      gridDiv.appendChild(cell);
+    }
+  }
+}
+
+function checkSelection(){
+  const lettersSelected = selectedCells.map(k=>{
+    const [r,c]=k.split(",").map(Number);
+    return grid[r][c];
+  }).join('');
+  const lettersReverse = lettersSelected.split('').reverse().join('');
+  const wordSound = document.getElementById("wordSound");
+
+  words.forEach((word,i)=>{
+    if(!foundWords.includes(word) && (lettersSelected===word || lettersReverse===word)){
+      foundWords.push(word);
+      selectedCells.forEach(k=>{
+        const [r,c]=k.split(",").map(Number);
+        getCell(r,c).classList.add("found");
+      });
+      document.getElementById("words").children[i].classList.add("found");
+      wordSound.currentTime=0; wordSound.play();
+      selectedCells.forEach(k=>{
+        const [r,c]=k.split(",").map(Number);
+        getCell(r,c).classList.remove("selected");
+      });
+      selectedCells=[];
+      if(foundWords.length===words.length){
+        document.getElementById("completed").style.display="block";
+        playConfetti();
+        document.getElementById("completedSound").play();
+        clearInterval(timerInterval);
+      }
+    }
+  });
+}
+
+function showAllAnswers(){
+  document.getElementById("timeUp").style.display="block";
+  words.forEach((word,i)=>{
+    if(!foundWords.includes(word)){
+      foundWords.push(word);
+      for(let r=0;r<gridSize;r++){
+        for(let c=0;c<gridSize;c++){
+          if(grid[r][c]===word[0]){
+            directions.forEach(([dr,dc])=>{
+              let match=true;
+              for(let k=0;k<word.length;k++){
+                const rr=r+dr*k, cc=c+dc*k;
+                if(rr<0||rr>=gridSize||cc<0||cc>=gridSize||grid[rr][cc]!==word[k]) match=false;
+              }
+              if(match){ for(let k=0;k<word.length;k++){ const rr=r+dr*k, cc=c+dc*k; getCell(rr,cc).classList.add("found"); } document.getElementById("words").children[i].classList.add("found"); }
+            });
+          }
+        }
+      }
+    }
+  });
+}
+
+function playConfetti(){
+  const confettiDiv = document.getElementById("confetti");
+  confettiDiv.innerHTML="";
+  confettiDiv.style.display="block";
+  for(let i=0;i<100;i++){
+    const c = document.createElement("div");
+    c.className="confetti";
+    c.style.left=Math.random()*100+"%";
+    c.style.backgroundColor = ["#ff6600","#ffcc00","#993399","#660000"][Math.floor(Math.random()*4)];
+    confettiDiv.appendChild(c);
+  }
+  setTimeout(()=>{ confettiDiv.style.display="none"; confettiDiv.innerHTML=""; },3000);
+}
+
+document.getElementById("newPuzzle").addEventListener("click", initPuzzle);
+document.getElementById("restart").addEventListener("click", initPuzzle);
+document.getElementById("playNew").addEventListener("click", initPuzzle);
+
+document.addEventListener('mousedown', e=>e.preventDefault());
+document.addEventListener('touchstart', e=>e.preventDefault());
+
+initPuzzle();
+</script>
+
+</body>
+</html>
+
+
