@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Halloween Sustainability Word Search</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #ff7518;
+    color: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  h1 {
+    text-align: center;
+    margin: 10px;
+  }
+
+  .game-container {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    justify-content: center;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    max-width: 95vw;
+  }
+
+  #wordsearch {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(20px, 8vw));
+    grid-auto-rows: minmax(20px, 8vw);
+    gap: 3px;
+    justify-content: center;
+  }
+
+  .cell {
+    background: #fff8e1;
+    border: 1px solid #b45309;
+    text-align: center;
+    font-size: 1.5em;
+    font-weight: bold;
+    user-select: none;
+    touch-action: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .cell.selected {
+    background-color: #ffa94d;
+  }
+
+  .cell.found {
+    background-color: #006400;
+    color: white;
+  }
+
+  .word-list {
+    background-color: #fff8e1;
+    border: 2px solid #b45309;
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 180px;
+    max-width: 220px;
+    box-sizing: border-box;
+  }
+
+  .word-list h2 {
+    margin-top: 0;
+    text-align: center;
+  }
+
+  .word-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .word-list li {
+    margin: 5px 0;
+    padding: 3px 5px;
+    border-radius: 5px;
+    transition: background 0.3s;
+  }
+
+  .word-list li.found {
+    background-color: #006400;
+    color: white;
+    text-decoration: line-through;
+  }
+
+  #timer {
+    margin-top: 10px;
+    font-size: 1.2em;
+  }
+
+  #newPuzzle {
+    margin-top: 10px;
+    background: #1a1a1a;
+    color: #fff;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 1em;
+    cursor: pointer;
+  }
+
+  #newPuzzle:hover {
+    background: #333;
+  }
+
+  @media (max-width: 768px) {
+    .game-container {
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #wordsearch {
+      grid-template-columns: repeat(10, minmax(25px, 9vw));
+      grid-auto-rows: minmax(25px, 9vw);
+    }
+
+    .word-list {
+      margin-top: 15px;
+      width: 90%;
+      max-width: none;
+    }
+  }
+</style>
+</head>
+<body>
+  <h1>🎃 Halloween Sustainability Word Search 🌱</h1>
+  <div id="timer">Time left: 5:00</div>
+  <div class="game-container">
+    <div id="wordsearch"></div>
+    <div class="word-list">
+      <h2>Word List</h2>
+      <ul id="words"></ul>
+    </div>
+  </div>
+  <button id="newPuzzle">New Puzzle</button>
+
+<script>
+  const words = [
+    "RECYCLE","REUSE","REDUCE","ECOFRIENDLY","GREEN","NATURE","SOLAR",
+    "WIND","PLANT","ENERGY","WATER","PAPER","EARTH","SAVING",
+    "COMPOST","CLEAN","BAMBOO","GARDEN","PLASTIC","OCEAN"
+  ];
+
+  const gridSize = 12;
+  let grid = [];
+  let selectedCells = [];
+  let foundWords = new Set();
+  let timerInterval;
+  let timeLeft = 300;
+
+  const wordsearch = document.getElementById("wordsearch");
+  const wordsList = document.getElementById("words");
+  const timerDisplay = document.getElementById("timer");
+  const newPuzzleBtn = document.getElementById("newPuzzle");
+
+  function createGrid() {
+    grid = Array(gridSize).fill().map(()=>Array(gridSize).fill(""));
+    for (let word of words) placeWord(word);
+    fillEmpty();
+  }
+
+  function placeWord(word) {
+    const directions = [
+      {x:1, y:0}, {x:0, y:1}, // horizontal & vertical only
+    ];
+    let placed = false;
+
+    while(!placed) {
+      const dir = directions[Math.floor(Math.random()*directions.length)];
+      const x = Math.floor(Math.random()*gridSize);
+      const y = Math.floor(Math.random()*gridSize);
+
+      if (x + dir.x*word.length <= gridSize && y + dir.y*word.length <= gridSize) {
+        let fits = true;
+        for (let i=0; i<word.length; i++) {
+          const nx = x + dir.x*i, ny = y + dir.y*i;
+          if (grid[ny][nx] && grid[ny][nx] !== word[i]) { fits = false; break; }
+        }
+        if (fits) {
+          for (let i=0; i<word.length; i++) {
+            const nx = x + dir.x*i, ny = y + dir.y*i;
+            grid[ny][nx] = word[i];
+          }
+          placed = true;
+        }
+      }
+    }
+  }
+
+  function fillEmpty() {
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    for (let y=0; y<gridSize; y++) {
+      for (let x=0; x<gridSize; x++) {
+        if (!grid[y][x]) grid[y][x] = letters[Math.floor(Math.random()*letters.length)];
+      }
+    }
+  }
+
+  function renderGrid() {
+    wordsearch.innerHTML = "";
+    grid.forEach((row, y) => {
+      row.forEach((letter, x) => {
+        const cell = document.createElement("div");
+        cell.textContent = letter;
+        cell.classList.add("cell");
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        wordsearch.appendChild(cell);
+      });
+    });
+  }
+
+  function renderWords() {
+    wordsList.innerHTML = "";
+    words.forEach(w => {
+      const li = document.createElement("li");
+      li.textContent = w;
+      wordsList.appendChild(li);
+    });
+  }
+
+  function startTimer() {
+    clearInterval(timerInterval);
+    timeLeft = 300;
+    updateTimer();
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      updateTimer();
+      if (timeLeft <= 0) {
+        clearInterval(timerInterval);
+        alert("⏰ Time’s up! Try again!");
+      }
+    }, 1000);
+  }
+
+  function updateTimer() {
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    timerDisplay.textContent = `Time left: ${minutes}:${seconds.toString().padStart(2,"0")}`;
+  }
+
+  function resetGame() {
+    foundWords.clear();
+    selectedCells = [];
+    createGrid();
+    renderGrid();
+    renderWords();
+    startTimer();
+    setupSelection();
+  }
+
+  function setupSelection() {
+    const cells = document.querySelectorAll(".cell");
+    let isDragging = false;
+
+    const start = e => {
+      e.preventDefault();
+      isDragging = true;
+      selectedCells = [];
+      const target = e.target.closest(".cell");
+      if (target) toggleSelect(target);
+    };
+
+    const move = e => {
+      if (!isDragging) return;
+      const touch = e.touches ? e.touches[0] : e;
+      const target = document.elementFromPoint(touch.clientX, touch.clientY);
+      const cell = target && target.closest(".cell");
+      if (cell && !selectedCells.includes(cell)) toggleSelect(cell);
+    };
+
+    const end = () => {
+      isDragging = false;
+      checkWord();
+      selectedCells.forEach(c => c.classList.remove("selected"));
+      selectedCells = [];
+    };
+
+    cells.forEach(c => {
+      c.addEventListener("mousedown", start);
+      c.addEventListener("mousemove", move);
+      c.addEventListener("mouseup", end);
+      c.addEventListener("touchstart", start);
+      c.addEventListener("touchmove", move);
+      c.addEventListener("touchend", end);
+    });
+  }
+
+  function toggleSelect(cell) {
+    cell.classList.add("selected");
+    selectedCells.push(cell);
+  }
+
+  function checkWord() {
+    const letters = selectedCells.map(c => c.textContent).join("");
+    const reverse = letters.split("").reverse().join("");
+    for (let w of words) {
+      if (letters === w || reverse === w) {
+        selectedCells.forEach(c => c.classList.add("found"));
+        foundWords.add(w);
+        document.querySelectorAll(".word-list li").forEach(li=>{
+          if(li.textContent===w) li.classList.add("found");
+        });
+      }
+    }
+    if (foundWords.size === words.length) {
+      clearInterval(timerInterval);
+      alert("🎉 Congratulations! You found all the words!");
+    }
+  }
+
+  newPuzzleBtn.addEventListener("click", resetGame);
+
+  resetGame();
+</script>
+</body>
+</html>
